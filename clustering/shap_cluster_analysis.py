@@ -7,11 +7,9 @@ Analysis for:
 - Block-level SHAP importance (numeric vs text_desc vs text_tags vs clip vs whisper)
 - UMAP + HDBSCAN clustering of videos in representation space
 - Cluster-wise SHAP fingerprints and summary stats
-- NEW: Within-cluster top vs bottom performance virality rules
 """
 
 import os
-import pickle
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -27,22 +25,23 @@ from collections import defaultdict
 # ================ CONFIG ============================
 # ====================================================
 
-# Paths – adjust if needed
+# Paths
 DATA_PATH = "../data/embeddings/tiktok_full_features.pkl"
-BLOCK_FEATURES_PATH = "../src/saved_features/X_pca_block.npy"  # X_FEATURE_SETS["block"]
+BLOCK_FEATURES_PATH = "../src/saved_features/X_pca_block.npy"
 MODEL_DIR = "../models"
-MODEL_NAME = "xgboost_full_pca_mode=block_standard"         # no extension
+MODEL_NAME = "xgboost_full_pca_mode=block_standard"
 
 RANDOM_STATE = 42
 
 # Block layout for block PCA features
 NUMERIC_DIM = 21  # X_numeric columns
 BLOCK_PCA_DIMS = {
-    "text": 32,     # desc PCA dim
+    "text": 32,
     "clip": 32,
     "whisper": 32,
 }
-# We have TWO text blocks (desc + tags), each 32
+
+# Two text blocks (caption and hashtags) which will eachbe reduced to 32 dis
 TEXT_DESC_DIM = BLOCK_PCA_DIMS["text"]
 TEXT_TAGS_DIM = BLOCK_PCA_DIMS["text"]
 CLIP_DIM = BLOCK_PCA_DIMS["clip"]
@@ -71,7 +70,7 @@ def load_xgb_model():
     model_path = os.path.join(MODEL_DIR, MODEL_NAME + ".json")
     model = xgb.XGBRegressor()
     model.load_model(model_path)
-    print(f"✅ Loaded XGBoost model from {model_path}")
+    print(f"Loaded XGBoost model from {model_path}")
     return model
 
 
@@ -126,7 +125,7 @@ def plot_block_importance(block_scores, out_path=None):
 
     if out_path:
         plt.savefig(out_path, dpi=200)
-        print(f"📊 Saved block importance plot to {out_path}")
+        print(f"Saved block importance plot to {out_path}")
     else:
         plt.show()
     plt.close()
@@ -143,7 +142,7 @@ def plot_umap(X_emb, values, title, cmap="viridis", out_path=None):
 
     if out_path:
         plt.savefig(out_path, dpi=200)
-        print(f"🗺️ Saved UMAP plot to {out_path}")
+        print(f"Saved UMAP plot to {out_path}")
     else:
         plt.show()
     plt.close()
@@ -174,117 +173,10 @@ def plot_umap_clusters(X_emb, cluster_labels, out_path=None):
 
     if out_path:
         plt.savefig(out_path, dpi=200)
-        print(f"🌐 Saved cluster UMAP plot to {out_path}")
+        print(f"Saved cluster UMAP plot to {out_path}")
     else:
         plt.show()
     plt.close()
-
-
-# ====================================================
-# ========== NEW: WITHIN-CLUSTER VIRALITY =============
-# ====================================================
-
-def analyze_within_cluster_virality(
-    df,
-    X,
-    shap_values,
-    y_true,
-    cluster_labels,
-    block_idx,
-    out_dir,
-    top_percent=TOP_PERCENT,
-    bottom_percent=BOTTOM_PERCENT,
-    min_cluster_size=15,
-):
-    """
-    For each non-noise cluster:
-      - find top and bottom percentiles by y_true (log_views)
-      - compute block-level mean |SHAP| for top vs bottom
-      - save CSV + bar plots
-    """
-    os.makedirs(out_dir, exist_ok=True)
-
-    unique_clusters = np.unique(cluster_labels)
-    rows = []
-
-    for c in unique_clusters:
-        if c == -1:
-            continue  # skip noise
-
-        cluster_mask = cluster_labels == c
-        idx_cluster = np.where(cluster_mask)[0]
-        n_c = len(idx_cluster)
-
-        if n_c < min_cluster_size:
-            print(f"Skipping cluster {c} (size {n_c} < {min_cluster_size})")
-            continue
-
-        y_c = y_true[idx_cluster]
-        shap_c = shap_values[idx_cluster]
-
-        # thresholds within this cluster
-        low_thr = np.percentile(y_c, bottom_percent)
-        high_thr = np.percentile(y_c, 100 - top_percent)
-
-        bottom_local = np.where(y_c <= low_thr)[0]
-        top_local = np.where(y_c >= high_thr)[0]
-
-        if len(top_local) == 0 or len(bottom_local) == 0:
-            print(f"Cluster {c}: not enough samples for top/bottom split, skipping.")
-            continue
-
-        shap_top = shap_c[top_local]
-        shap_bottom = shap_c[bottom_local]
-
-        # block scores
-        block_top = block_importance(shap_top, block_idx)
-        block_bottom = block_importance(shap_bottom, block_idx)
-
-        # store rows for CSV
-        for tier_name, block_scores in [("top", block_top), ("bottom", block_bottom)]:
-            row = {
-                "cluster": c,
-                "cluster_size": n_c,
-                "tier": tier_name,
-                "tier_count": len(top_local) if tier_name == "top" else len(bottom_local),
-                "mean_true_log_views_tier": float(y_c[top_local].mean())
-                if tier_name == "top"
-                else float(y_c[bottom_local].mean()),
-            }
-            for bname, score in block_scores.items():
-                row[f"block_{bname}_mean_abs_shap"] = score
-            rows.append(row)
-
-        # --- Plot: block SHAP comparison for this cluster ---
-        blocks = list(block_top.keys())
-        top_vals = [block_top[b] for b in blocks]
-        bottom_vals = [block_bottom[b] for b in blocks]
-
-        x = np.arange(len(blocks))
-        width = 0.35
-
-        plt.figure(figsize=(5, 3.5))
-        plt.bar(x - width / 2, bottom_vals, width, label=f"Bottom {bottom_percent}%")
-        plt.bar(x + width / 2, top_vals, width, label=f"Top {top_percent}%")
-        plt.xticks(x, blocks, rotation=25, ha="right")
-        plt.ylabel("Mean |SHAP|")
-        plt.title(f"Cluster {c}: block importance (top vs bottom)")
-        plt.legend()
-        plt.tight_layout()
-
-        path = os.path.join(out_dir, f"cluster_{c}_top_vs_bottom_block_shap.png")
-        plt.savefig(path, dpi=200)
-        plt.close()
-        print(f"🧩 Saved top vs bottom block SHAP for cluster {c} → {path}")
-
-    if rows:
-        rules_df = pd.DataFrame(rows)
-        csv_path = os.path.join(out_dir, "cluster_virality_rules.csv")
-        rules_df.to_csv(csv_path, index=False)
-        print(f"📄 Saved cluster top/bottom virality rules to {csv_path}")
-    else:
-        print("No clusters had enough data for top/bottom analysis.")
-
 
 # ====================================================
 # ================ MAIN ANALYSIS =====================
@@ -377,17 +269,17 @@ def main():
     df_out = df.copy()
     df_out["cluster"] = cluster_labels
     df_out.to_csv(cluster_csv_path, index=False)
-    print(f"✅ Saved video cluster labels to {cluster_csv_path}")
+    print(f"Saved video cluster labels to {cluster_csv_path}")
 
     # 2. Save raw labels for fast reload
     cluster_npy_path = os.path.join(CLUSTER_SAVE_DIR, "cluster_labels.npy")
     np.save(cluster_npy_path, cluster_labels)
-    print(f"✅ Saved raw cluster labels to {cluster_npy_path}")
+    print(f"Saved raw cluster labels to {cluster_npy_path}")
 
     # 3. Save the UMAP embedding too (IMPORTANT for plots later)
     umap_npy_path = os.path.join(CLUSTER_SAVE_DIR, "X_umap.npy")
     np.save(umap_npy_path, X_umap)
-    print(f"✅ Saved UMAP embedding to {umap_npy_path}")
+    print(f"Saved UMAP embedding to {umap_npy_path}")
 
     print("\nCluster sizes (including noise=-1):")
     print(df["cluster"].value_counts().sort_index())
@@ -447,7 +339,7 @@ def main():
     cluster_summary_df = pd.DataFrame(rows).sort_values("cluster")
     csv_path = os.path.join(out_dir, "cluster_shap_summary.csv")
     cluster_summary_df.to_csv(csv_path, index=False)
-    print(f"📄 Saved cluster SHAP summary to {csv_path}")
+    print(f"Saved cluster SHAP summary to {csv_path}")
 
     for c, info in cluster_shap.items():
         if c == -1:
@@ -467,27 +359,9 @@ def main():
         path = os.path.join(out_dir, f"cluster_{c}_block_shap.png")
         plt.savefig(path, dpi=200)
         plt.close()
-        print(f"🧩 Saved block SHAP plot for cluster {c} to {path}")
+        print(f"Saved block SHAP plot for cluster {c} to {path}")
 
-    # ====================================================
-    # ============ NEW: WITHIN-CLUSTER RULES ============
-    # ====================================================
-
-    print("\nAnalyzing within-cluster top vs bottom performance…")
-    analyze_within_cluster_virality(
-        df=df,
-        X=X,
-        shap_values=shap_values,
-        y_true=y_true,
-        cluster_labels=cluster_labels,
-        block_idx=block_idx,
-        out_dir=os.path.join(out_dir, "within_cluster"),
-        top_percent=TOP_PERCENT,
-        bottom_percent=BOTTOM_PERCENT,
-        min_cluster_size=15,
-    )
-
-    print("\n✅ All analysis done.")
+    print("\nAnalysis done.")
 
 
 if __name__ == "__main__":

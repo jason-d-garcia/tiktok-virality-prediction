@@ -18,7 +18,7 @@ DEVICE = "cpu"   # keep CPU on Mac (MPS causes this exact error)
 # LOAD MODEL
 # ----------------------------
 
-print("✅ Using device:", DEVICE)
+print("Using device:", DEVICE)
 model = whisper.load_model("base").to(DEVICE)
 
 # ----------------------------
@@ -26,7 +26,7 @@ model = whisper.load_model("base").to(DEVICE)
 # ----------------------------
 
 video_files = sorted(VIDEO_DIR.glob("*.mp4"))
-print(f"✅ Found {len(video_files)} videos.")
+print(f"Found {len(video_files)} videos.")
 
 all_embeddings = []
 
@@ -57,7 +57,7 @@ for video_path in tqdm(video_files, desc="Extracting Whisper"):
         all_embeddings.append(embedding)
 
     except Exception as e:
-        print(f"⚠️ Audio failed for {video_path.name}: {e}")
+        print(f"Audio failed for {video_path.name}: {e}")
         all_embeddings.append(np.zeros(512))
 
 # ----------------------------
@@ -67,5 +67,5 @@ for video_path in tqdm(video_files, desc="Extracting Whisper"):
 X_whisper = np.vstack(all_embeddings)
 np.save(OUT_FILE, X_whisper)
 
-print("✅ Whisper embeddings saved to:", OUT_FILE)
-print("✅ Shape:", X_whisper.shape)
+print("Whisper embeddings saved to:", OUT_FILE)
+print("Shape:", X_whisper.shape)

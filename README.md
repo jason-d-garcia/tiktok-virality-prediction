@@ -121,3 +121,37 @@ This project goes beyond prediction by analyzing how different content regimes b
 ├── README.md
 └── requirements.txt
 ```
+
+---
+
+## 🛠️ Core Dependencies
+
+This project uses a multimodal ML stack that combines deep pretrained encoders, classical ML models, and clustering methods.
+
+### Model & Feature Extraction
+- **PyTorch** — backbone framework for deep feature loading and inference  
+- **OpenAI CLIP** — visual and text embedding extraction  
+- **OpenAI Whisper** — audio embedding extraction  
+
+### Machine Learning & Evaluation
+- **XGBoost** — primary nonlinear regressor  
+- **scikit-learn** — preprocessing, PCA, cross-validation utilities  
+- **SHAP** — model explainability and feature attribution  
+- **umap-learn** — 2D manifold projections for multimodal similarity  
+- **hdbscan** — density-based clustering on UMAP embeddings  
+
+### Data & Plotting
+- **pandas**, **numpy** — data manipulation  
+- **matplotlib**, **seaborn** — visualization  
+
+See `requirements.txt` for exact pinned versions.
+
+---
+
+## 👤 Author
+
+Jason Garcia  
+Brigham Young University  
+Theory of Predictive Modeling — CS 580 / PHSC 580R  
+
+For questions, feel free to open an issue or reach out.

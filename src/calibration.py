@@ -20,8 +20,8 @@ except:
 # ===============================
 
 MODEL_DIR = "../models"
-FEATURE_DIR = "saved_features"
-OUTPUT_DIR = "calibration_plots"
+FEATURE_DIR = "../data/saved_features"
+OUTPUT_DIR = "../reports/calibration_plots"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -36,7 +36,7 @@ N_SPLITS = 3
 X_BLOCK = np.load(f"{FEATURE_DIR}/X_pca_block.npy")
 y       = np.load(f"{FEATURE_DIR}/y.npy")
 
-print("✅ Loaded BLOCK PCA feature matrix + y")
+print("Loaded BLOCK PCA feature matrix + y")
 
 
 # ===============================
@@ -82,7 +82,7 @@ for fname in os.listdir(MODEL_DIR):
         key = fname.replace(".pkl", "").replace(".json", "")
         MODELS[key] = load_model(os.path.join(MODEL_DIR, fname))
 
-print(f"✅ Loaded {len(MODELS)} BLOCK PCA models for calibration")
+print(f"Loaded {len(MODELS)} BLOCK PCA models for calibration")
 
 
 # ===============================
@@ -192,6 +192,6 @@ for model_name, model in MODELS.items():
         save_path=top10_path
     )
 
-    print(f"   ✓ Saved regression + top10 plots for {model_name}")
+    print(f"Saved regression + top10 plots for {model_name}")
 
-print("\n🎉 DONE — 3 MODELS CALIBRATED USING EXPANDING CV + BLOCK PCA 🎉")
+print("\nDONE — 3 MODELS CALIBRATED USING EXPANDING CV + BLOCK PCA")

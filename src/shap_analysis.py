@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 # -----------------------
 
 MODEL_DIR = "../models/"
-FEATURE_DIR = "saved_features"
+FEATURE_DIR = "../data/saved_features"
 OUTPUT_DIR = "shap_outputs"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -25,14 +25,14 @@ FEATURE_FILE = "X_pca_block.npy"   # must match model PCA mode
 
 model = xgb.XGBRegressor()
 model.load_model(os.path.join(MODEL_DIR, MODEL_FILE))
-print(f"✅ Loaded model: {MODEL_FILE}")
+print(f"Loaded model: {MODEL_FILE}")
 
 # -----------------------
 # LOAD FEATURES
 # -----------------------
 
 X = np.load(os.path.join(FEATURE_DIR, FEATURE_FILE))
-print(f"✅ Loaded features: {X.shape}")
+print(f"Loaded features: {X.shape}")
 
 # -----------------------
 # SHAP EXPLAINER
@@ -41,7 +41,7 @@ print(f"✅ Loaded features: {X.shape}")
 explainer = shap.TreeExplainer(model)
 shap_values = explainer.shap_values(X)
 
-print("✅ SHAP values computed")
+print("SHAP values computed")
 
 # -----------------------
 # GLOBAL FEATURE IMPORTANCE
@@ -53,7 +53,7 @@ plt.tight_layout()
 plt.savefig(os.path.join(OUTPUT_DIR, "shap_summary_global.png"), dpi=300)
 plt.close()
 
-print("✅ Saved global SHAP summary")
+print("Saved global SHAP summary")
 
 # -----------------------
 # MEAN ABS SHAP PER FEATURE
@@ -66,10 +66,10 @@ np.save(
     mean_abs_shap
 )
 
-print("✅ Saved mean absolute SHAP values")
+print("Saved mean absolute SHAP values")
 
 # -----------------------
-# BLOCK-LEVEL IMPORTANCE (OPTIONAL)
+# BLOCK-LEVEL IMPORTANCE
 # -----------------------
 
 # Only use this if PCA_MODE == "block"
@@ -89,5 +89,5 @@ for block, sl in BLOCK_SLICES.items():
 with open(os.path.join(OUTPUT_DIR, "block_importance.json"), "w") as f:
     json.dump(block_importance, f, indent=2)
 
-print("✅ Saved block-level SHAP importance")
+print("Saved block-level SHAP importance")
 print(block_importance)

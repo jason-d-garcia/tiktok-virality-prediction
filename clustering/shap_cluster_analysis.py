@@ -27,7 +27,7 @@ from collections import defaultdict
 
 # Paths
 DATA_PATH = "../data/embeddings/tiktok_full_features.pkl"
-BLOCK_FEATURES_PATH = "../src/saved_features/X_pca_block.npy"
+BLOCK_FEATURES_PATH = "../data/saved_features/X_pca_block.npy"
 MODEL_DIR = "../models"
 MODEL_NAME = "xgboost_full_pca_mode=block_standard"
 

@@ -87,10 +87,6 @@ This project goes beyond prediction by analyzing how different content regimes b
 - Automatically discovered distinct content regimes
 - Each cluster exhibited different feature dependencies
 
-### Within-Cluster Virality Rules
-- Compared top vs bottom performers *within each cluster*
-- Revealed that virality mechanisms differ by content type, not globally
-
 ---
 
 ## ⚠️ Limitations
@@ -115,22 +111,13 @@ This project goes beyond prediction by analyzing how different content regimes b
 ## 📂 Repository Structure
 
 ```text
-├── data/
-│   ├── embeddings/
-│   ├── clusters/
-│
-├── models/
-│
-├── reports/
-│   ├── shap/
-│   ├── umap/
-│   ├── calibration/
-│
-├── src/
-│   ├── training scripts
-│   ├── calibration
-│   ├── SHAP + clustering analysis
-│
-├── poster/
-│
-└── README.md
+├── clustering/        # Clustering analysis & UMAP/HDBSCAN results
+├── data/              # Raw and processed data
+├── models/            # Trained model checkpoints
+├── preprocessing/     # Feature engineering & Clip/Whisper Embeddings
+├── reports/           # Figures, SHAP plots, calibration curves
+├── src/               # Core training & analysis scripts
+├── util/              # Helper utilities
+├── README.md
+└── requirements.txt
+```

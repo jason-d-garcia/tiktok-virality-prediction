@@ -7,7 +7,7 @@ import os
 # ===== CONFIG ===================
 # ================================
 
-RESULTS_PATH = "experiment_results.csv"
+RESULTS_PATH = "../reports/experiment_results.csv"
 OUTPUT_DIR = "poster_figures_block_pca_expanding"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -29,7 +29,7 @@ df_block = df[
 # Normalize model names
 df_block["model"] = df_block["model"].str.capitalize()
 
-print("\n✅ Filtered Data Used for Plots:")
+print("\nFiltered Data Used for Plots:")
 print(df_block[["model", "mean_r2", "mean_rmse", "mean_mae", "mean_smape", "mean_spearman", "mean_topk"]])
 
 models = df_block["model"].values

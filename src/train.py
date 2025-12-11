@@ -216,13 +216,13 @@ X_FEATURE_SETS["global"] = apply_global_pca(X_full, GLOBAL_PCA_DIM)
 X_FEATURE_SETS["block"] = apply_block_pca()
 
 # Save feature sets for reproducibility
-os.makedirs("saved_features", exist_ok=True)
+os.makedirs("../data/saved_features", exist_ok=True)
 
-np.save("saved_features/X_metadata.npy", X_metadata)
-np.save("saved_features/X_full.npy", X_FEATURE_SETS["none"])
-np.save("saved_features/X_pca_global.npy", X_FEATURE_SETS["global"])
-np.save("saved_features/X_pca_block.npy", X_FEATURE_SETS["block"])
-np.save("saved_features/y.npy", y)
+np.save("../data/saved_features/X_metadata.npy", X_metadata)
+np.save("../data/saved_features/X_full.npy", X_FEATURE_SETS["none"])
+np.save("../data/saved_features/X_pca_global.npy", X_FEATURE_SETS["global"])
+np.save("../data/saved_features/X_pca_block.npy", X_FEATURE_SETS["block"])
+np.save("../data/saved_features/y.npy", y)
 
 # =========================
 # ====== BUILD MODEL ======

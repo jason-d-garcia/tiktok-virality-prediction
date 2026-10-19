@@ -14,7 +14,7 @@ torchaudio
 git+https://github.com/openai/CLIP.git
 
 # OpenAI Whisper
-openai-whisper~=20250625
+openai-whisper==20250625
 
 # Video & Audio Processing
 opencv-python~=4.12.0.88

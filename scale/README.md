@@ -16,6 +16,8 @@ a point. Then adapt it to Emily and calibrate its intervals with conformal predi
 | 5. Pretrain | `python -m scale.train --posts data/scale/posts.parquet --emb-dirs data/scale/emb/text data/scale/emb/av --modalities video,audio,text --head mdn --out models/scale/mdn_all.pt` | checkpoint + a row in `reports/scale_results.csv` |
 | 6. Adapt to Emily | `python -m scale.finetune --posts data/scale/posts.parquet --checkpoint models/scale/mdn_all.pt --emb-dirs data/scale/emb/text data/scale/emb/av` | rows per mode and calibration |
 
+**Unattended run** (steps 2–4 in one command, for a weekend on an external drive): `caffeinate -i python -m scale.weekend_run --posts data/scale/posts.parquet --root /Volumes/<drive>/tiktok --target 100000`. It runs a 200-post pilot per source (drops sources below `--min-success`), then fetches whole-creator batches while the previous batch embeds, deletes clips after embedding, backs off once on a low-success batch and stops on a second one, or when the disk drops below `--min-free-gb`. Progress: `<root>/run_log.jsonl`.
+
 Every step is resumable. Re-run the same command and it skips finished work.
 
 Smoke test on synthetic data (no downloads, CPU only): `python -m tests.smoke_scale`.

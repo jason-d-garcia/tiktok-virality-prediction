@@ -35,7 +35,9 @@ previous 10 posts) on the same rows.
 
 ## Known limits
 
-- Views are one cumulative snapshot. TikTok-10M has `collected_time`, so post age is a control. EinzzCookie and Emily don't record it.
-- Creator-history features use the *final* view counts of earlier posts, which overstates what a creator knew on publish day.
+- Views are one cumulative snapshot. Post age is a control: TikTok-10M age runs to `stats_time` (`--tiktok10m-views-at` switches it back), SMP-Video to its crawl date. EinzzCookie and Emily don't record it. Posts younger than 7 days at collection are dropped (`--min-age-days`).
+- Creator-history features (and the creator baseline) use only posts published at least 7 days earlier. Their counts are still final counts, so history remains a little optimistic.
+- EinzzCookie is a test set only (6,258 unique posts, ~1 per creator); `scale.train` never pretrains on it.
+- SMP-Video views are rebuilt as days × 2^(label − 1). Its column names are from the challenge release and still need checking against the files. Unit checks: `python -m tests.test_posts`.
 - None of the public sets ship video files. Clips come from yt-dlp, which TikTok's terms don't permit. Keep the clip count modest and delete clips after embedding.
 - Whisper runs on CPU on Apple Silicon (MPS fails on some encoder ops). CLIP uses MPS.

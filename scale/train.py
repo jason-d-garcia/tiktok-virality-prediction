@@ -21,7 +21,8 @@ import pandas as pd
 import torch
 
 from scale.data import Scaler, batches, creator_split, load_modalities, tabular_columns, to_tensors
-from scale.features import creator_baseline
+from scale.features import creator_baseline, impute_history
+from scale.posts import TEST_ONLY_SOURCES
 from scale.metrics import score_forecast
 from scale.model import FusionNet
 
@@ -129,9 +130,11 @@ def main():
     torch.manual_seed(0)
     modalities = [m for m in args.modalities.split(",") if m]
     df = pd.read_parquet(args.posts)
-    df = df[df["source"] != "emily"].reset_index(drop=True)
+    df = df[(df["source"] != "emily") & ~df["source"].isin(TEST_ONLY_SOURCES)].reset_index(drop=True)
     df["baseline"] = creator_baseline(df)
     split = creator_split(df["creator_id"])
+    history_fill = float(df.loc[split == "train", "y_log"].median())
+    df = impute_history(df, history_fill)
     print({s: int((split == s).sum()) for s in ("train", "val", "test")}, "posts by split")
 
     tab, emb, cols = prepare(df, args.emb_dirs, modalities, args.use_followers)
@@ -177,7 +180,7 @@ def main():
     torch.save({
         "state_dict": model.state_dict(),
         "config": {"tab_dim": len(cols), "modalities": modalities, "head": args.head, "head_kw": head_kw,
-                   "use_followers": args.use_followers},
+                   "use_followers": args.use_followers, "history_fill": history_fill},
         "tab_scaler": tab_scaler.state(),
         "emb_scalers": {m: s.state() for m, s in emb_scalers.items()},
     }, args.out)

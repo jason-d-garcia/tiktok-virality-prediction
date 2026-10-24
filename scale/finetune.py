@@ -27,7 +27,7 @@ import pandas as pd
 import torch
 
 from scale.data import Scaler, load_modalities, tabular_columns, to_tensors
-from scale.features import creator_baseline
+from scale.features import creator_baseline, impute_history
 from scale.metrics import score_forecast
 from scale.model import QUANTILES, FusionNet
 from scale.train import append_result, fit, predict
@@ -80,6 +80,7 @@ def main():
     if len(df) < 30:
         raise SystemExit(f"Only {len(df)} posts for {args.creator}")
     df["baseline"] = creator_baseline(df)
+    df = impute_history(df, cfg["history_fill"])
 
     cols = tabular_columns(cfg["use_followers"])
     tab = tab_scaler.transform(df[cols].to_numpy(np.float64))

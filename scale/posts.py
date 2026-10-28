@@ -100,24 +100,21 @@ def load_emily(csv_path, collected_time=None):
     return _finish(df)
 
 
-def load_tiktok10m(path, views_at="stats_time"):
-    """
-    The-data-company/TikTok-10M parquet shards.
+TIKTOK10M_COLUMNS = ["id", "user_id", "create_time", "collected_time", "play_count", "duration", "desc", "url"]
+# play_count is left-truncated here: the set holds trending posts (memo section 4)
+TIKTOK10M_TRUNCATION_VIEWS = 10 ** 4.5
 
-    `play_count` was most likely read at `stats_time`, which is up to ~98 days after
-    `collected_time` (memo section 4, to verify). `views_at` picks the timestamp that
-    post age is measured to; it falls back to `collected_time` if the column is absent.
-    A post seen more than once keeps its latest reading.
-    """
-    raw = _read_any(path)
-    _require(raw, ["id", "user_id", "create_time", "collected_time", "play_count", "duration", "desc", "url"], "tiktok10m")
+
+def map_tiktok10m(raw, views_at="stats_time"):
+    """Map raw TikTok-10M rows onto the post table, before cross-shard dedup."""
+    _require(raw, TIKTOK10M_COLUMNS, "tiktok10m")
     if views_at not in raw.columns:
         print(f"tiktok10m: no {views_at} column, measuring age to collected_time")
         views_at = "collected_time"
-    df = pd.DataFrame({
-        "post_id": raw["id"],
+    return pd.DataFrame({
+        "post_id": raw["id"].astype(str),
         "source": "tiktok10m",
-        "creator_id": raw["user_id"],
+        "creator_id": raw["user_id"].astype(str),
         "create_time": _to_utc(raw["create_time"]),
         "collected_time": _to_utc(raw[views_at]),
         "views": pd.to_numeric(raw["play_count"], errors="coerce"),
@@ -125,6 +122,23 @@ def load_tiktok10m(path, views_at="stats_time"):
         "caption": raw["desc"],
         "video_url": raw["url"],
     })
+
+
+def load_tiktok10m(path, views_at="stats_time"):
+    """
+    The-data-company/TikTok-10M parquet shards, read whole, or the single table
+    scale.ingest_tiktok10m writes (use that for all 10 shards on an 8 GB machine;
+    its views_at choice then applies).
+
+    `play_count` was most likely read at `stats_time`, which is up to ~98 days after
+    `collected_time` (memo section 4, to verify). `views_at` picks the timestamp that
+    post age is measured to; it falls back to `collected_time` if the column is absent.
+    A post seen more than once keeps its latest reading.
+    """
+    raw = _read_any(path)
+    if set(COLUMNS) <= set(raw.columns):
+        return _finish(raw)  # already mapped and deduped by scale.ingest_tiktok10m
+    df = map_tiktok10m(raw, views_at)
     df = df.sort_values("collected_time", na_position="first").drop_duplicates("post_id", keep="last")
     return _finish(df)
 

@@ -1,24 +1,15 @@
 """Assemble model inputs: tabular features + aligned embeddings, with train-fitted scaling."""
 
-import hashlib
-
 import numpy as np
 import torch
 
 from scale.embed import load_embeddings
 from scale.features import FOLLOWER_FEATURES, TABULAR_FEATURES
+from scale.splits import creator_split  # noqa: F401  (re-exported for scale.train)
 
 
 def tabular_columns(use_followers):
     return TABULAR_FEATURES + (FOLLOWER_FEATURES if use_followers else [])
-
-
-def creator_split(creator_ids, val_frac=0.1, test_frac=0.1):
-    """Deterministic creator-disjoint split by hashing the creator id."""
-    def bucket(c):
-        return int(hashlib.md5(str(c).encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
-    b = np.array([bucket(c) for c in creator_ids])
-    return np.where(b < test_frac, "test", np.where(b < test_frac + val_frac, "val", "train"))
 
 
 def load_modalities(df, emb_dirs, modalities):

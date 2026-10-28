@@ -23,8 +23,10 @@ import torch
 from scale.data import Scaler, batches, creator_split, load_modalities, tabular_columns, to_tensors
 from scale.features import creator_baseline, impute_history
 from scale.posts import pretrain_rows
+from scale.leaderboard import write_predictions
 from scale.metrics import score_forecast
-from scale.model import FusionNet
+from scale.model import QUANTILES, FusionNet
+from scale.splits import load_split
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RESULTS_PATH = Path(os.environ.get("SCALE_RESULTS", PROJECT_ROOT / "reports" / "scale_results.csv"))
@@ -125,6 +127,9 @@ def main():
     parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--out", required=True)
+    parser.add_argument("--splits", default=None, help="scale.splits table; default hashes creators as before")
+    parser.add_argument("--scheme", default="strict", choices=["creator", "time", "strict"])
+    parser.add_argument("--pred-out", default=None, help="write test predictions for scale.leaderboard here")
     args = parser.parse_args()
 
     torch.manual_seed(0)
@@ -132,7 +137,12 @@ def main():
     df = pd.read_parquet(args.posts)
     df = pretrain_rows(df)
     df["baseline"] = creator_baseline(df)
-    split = creator_split(df["creator_id"])
+    if args.splits:
+        df["post_id"] = df["post_id"].astype(str)
+        df = df.merge(load_split(args.splits, args.scheme), on=["source", "post_id"], how="left")
+        split = df["split"].fillna("unused").to_numpy()
+    else:
+        split = creator_split(df["creator_id"])
     history_fill = float(df.loc[split == "train", "y_log"].median())
     df = impute_history(df, history_fill)
     print({s: int((split == s).sum()) for s in ("train", "val", "test")}, "posts by split")
@@ -175,6 +185,10 @@ def main():
             result["mdn_weights"] = " ".join(f"{w:.2f}" for w in model.head.mixture_weights(p).tolist())
     print(json.dumps(result, indent=2))
     append_result(result)
+    if args.pred_out:
+        name = Path(args.out).stem
+        write_predictions(args.pred_out, df.loc[te], q_pred, QUANTILES, model=name)
+        print("Saved predictions", args.pred_out)
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     torch.save({

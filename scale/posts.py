@@ -18,8 +18,9 @@ Each loader returns a DataFrame with these columns (missing values are NaN/None)
 Field names for the Hugging Face sets come from their dataset cards. Loaders
 fail loudly on a missing column instead of guessing.
 
-EinzzCookie is a test set only (6,258 unique posts, median 1 post per creator),
-so it never enters pretraining; see TEST_ONLY_SOURCES.
+EinzzCookie (6,258 unique posts, median 1 post per creator) and SMP-Video
+(4,000 labeled posts, ~1.1 per creator, not truncated on views) are test sets
+only: they are kept whole and never enter pretraining; see TEST_ONLY_SOURCES.
 """
 
 from pathlib import Path
@@ -244,8 +245,13 @@ def load_smp(path, collected_time=None):
 
 LOADERS = {"emily": load_emily, "tiktok10m": load_tiktok10m, "einzz": load_einzz, "smp": load_smp}
 
-# Evaluated on, never pretrained on.
-TEST_ONLY_SOURCES = {"einzz"}
+# Evaluated on, never pretrained on. build_posts keeps them whole (no creator sampling).
+TEST_ONLY_SOURCES = {"einzz", "smp"}
+
+
+def pretrain_rows(df):
+    """Rows scale.train may pretrain on: not Emily (the target creator), not test-only."""
+    return df[(df["source"] != "emily") & ~df["source"].isin(TEST_ONLY_SOURCES)].reset_index(drop=True)
 
 
 def sample_creators(df, n_posts, min_posts_per_creator=5, seed=42):

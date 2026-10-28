@@ -22,7 +22,7 @@ import torch
 
 from scale.data import Scaler, batches, creator_split, load_modalities, tabular_columns, to_tensors
 from scale.features import creator_baseline, impute_history
-from scale.posts import TEST_ONLY_SOURCES
+from scale.posts import pretrain_rows
 from scale.metrics import score_forecast
 from scale.model import FusionNet
 
@@ -130,7 +130,7 @@ def main():
     torch.manual_seed(0)
     modalities = [m for m in args.modalities.split(",") if m]
     df = pd.read_parquet(args.posts)
-    df = df[(df["source"] != "emily") & ~df["source"].isin(TEST_ONLY_SOURCES)].reset_index(drop=True)
+    df = pretrain_rows(df)
     df["baseline"] = creator_baseline(df)
     split = creator_split(df["creator_id"])
     history_fill = float(df.loc[split == "train", "y_log"].median())

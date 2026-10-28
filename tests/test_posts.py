@@ -12,7 +12,8 @@ import numpy as np
 import pandas as pd
 
 from scale.features import add_features, creator_baseline, filter_min_age, impute_history
-from scale.posts import load_einzz, load_emily, load_smp, load_tiktok10m, smp_label_to_views, views_to_smp_label
+from scale.posts import (load_einzz, load_emily, load_smp, load_tiktok10m, pretrain_rows, smp_label_to_views,
+                         views_to_smp_label)
 
 
 def test_smp_label_roundtrip():
@@ -114,6 +115,11 @@ def test_emily_unknown_collection_date(tmp):
     assert not df["views_estimated"].any()
 
 
+def test_pretrain_excludes_test_only():
+    df = pd.DataFrame({"source": ["emily", "tiktok10m", "einzz", "smp"], "post_id": list("abcd")})
+    assert pretrain_rows(df)["source"].tolist() == ["tiktok10m"], "never pretrain on Emily, EinzzCookie or SMP"
+
+
 def main():
     test_smp_label_roundtrip()
     for test in (test_load_smp, test_tiktok10m_age_and_dedup, test_einzz_dedup,
@@ -122,6 +128,7 @@ def main():
             test(Path(d))
     test_lagged_history()
     test_min_age_filter()
+    test_pretrain_excludes_test_only()
     print("OK")
 
 

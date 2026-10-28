@@ -48,6 +48,9 @@ def _finish(df):
     df["post_id"] = df["post_id"].astype(str)
     df["creator_id"] = df["creator_id"].astype(str)
     df["caption"] = df["caption"].fillna("").astype(str)
+    # an all-NaT collected_time (date unknown) is tz-naive; age arithmetic needs UTC
+    for col in ("create_time", "collected_time"):
+        df[col] = pd.to_datetime(df[col], utc=True)
     df = df.dropna(subset=["views", "create_time"])
     df = df[df["views"] >= 0]
     return df.drop_duplicates(subset=["source", "post_id"]).reset_index(drop=True)
@@ -163,13 +166,19 @@ def views_to_smp_label(views, days):
     return np.log2(np.asarray(views, dtype=float) / np.asarray(days, dtype=float)) + 1
 
 
-SMP_FILES = {"posts": "train_posts", "labels": "train_label", "users": "train_users"}
+# File stems in the smpchallenge/SMP-Video release (train split; test has no labels).
+SMP_FILES = {
+    "posts": "SMP-Video_anonymized_posts_train",
+    "labels": "SMP-Video_anonymized_popularity_train",
+    "users": "SMP-Video_anonymized_users_train",
+    "videos": "SMP-Video_anonymized_videos_train",
+}
 
 
 def _smp_table(path, stem):
-    files = sorted(Path(path).rglob(f"{stem}*.parquet")) + sorted(Path(path).rglob(f"{stem}*.csv"))
+    files = [f for ext in ("parquet", "jsonl", "csv") for f in sorted(Path(path).rglob(f"{stem}*.{ext}"))]
     if not files:
-        raise FileNotFoundError(f"smp: no {stem}*.parquet or .csv under {path}")
+        raise FileNotFoundError(f"smp: no {stem}*.parquet, .jsonl or .csv under {path}")
     return _read_any(files[0])
 
 
@@ -177,11 +186,12 @@ def load_smp(path, collected_time=None):
     """
     smpchallenge/SMP-Video (gated; labeled train split only).
 
-    Column names follow the SMP challenge release (pid, uid, post_time,
-    post_content, popularity, user_follower_count) and are NOT yet checked against
-    the downloaded files. Views are rebuilt from the label as
-    days * 2**(label - 1). If the files carry no crawl timestamp, pass the crawl
-    date as `collected_time`; without either the loader refuses to guess.
+    Checked against the release: posts (pid, uid, post_time, post_content),
+    popularity (pid, popularity), users (uid, user_follower_count) and videos
+    (pid, video_duration in seconds). Raw views are not released; they are
+    rebuilt from the label as days * 2**(label - 1). The release carries no
+    crawl timestamp, so pass the crawl date as `collected_time`; without it the
+    loader refuses to guess.
     """
     posts = _smp_table(path, SMP_FILES["posts"])
     labels = _smp_table(path, SMP_FILES["labels"])
@@ -194,6 +204,12 @@ def load_smp(path, collected_time=None):
         raw = raw.merge(users[["uid", "user_follower_count"]].drop_duplicates("uid"), on="uid", how="left")
     except FileNotFoundError:
         raw["user_follower_count"] = np.nan
+    try:
+        videos = _smp_table(path, SMP_FILES["videos"])
+        _require(videos, ["pid", "video_duration"], "smp.videos")
+        raw = raw.merge(videos[["pid", "video_duration"]].drop_duplicates("pid"), on="pid", how="left")
+    except FileNotFoundError:
+        pass
 
     create = _to_utc(raw["post_time"])
     crawl_col = next((c for c in ("crawl_time", "collected_time", "stats_time") if c in raw.columns), None)

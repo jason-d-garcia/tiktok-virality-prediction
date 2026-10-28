@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 from scale.features import add_features, creator_baseline, filter_min_age, impute_history
-from scale.posts import load_einzz, load_smp, load_tiktok10m, smp_label_to_views, views_to_smp_label
+from scale.posts import load_einzz, load_emily, load_smp, load_tiktok10m, smp_label_to_views, views_to_smp_label
 
 
 def test_smp_label_roundtrip():
@@ -27,11 +27,16 @@ def test_load_smp(tmp):
     post_time = pd.Timestamp("2024-03-01", tz="UTC")
     crawl = "2024-06-09"  # 100 days later, as passed by --smp-collected
     pd.DataFrame({"pid": ["a", "b"], "uid": ["u1", "u1"], "post_time": [post_time] * 2,
-                  "post_content": ["x", "y #fyp"]}).to_parquet(tmp / "train_posts.parquet")
+                  "post_content": ["x", "y #fyp"]}).to_json(tmp / "SMP-Video_anonymized_posts_train.jsonl",
+                                                             orient="records", lines=True, date_format="iso")
     labels = views_to_smp_label(np.array([5000.0, 120.0]), 100)
-    pd.DataFrame({"pid": ["a", "b"], "popularity": labels}).to_parquet(tmp / "train_label.parquet")
+    pd.DataFrame({"pid": ["a", "b"], "popularity": labels}).to_json(
+        tmp / "SMP-Video_anonymized_popularity_train.jsonl", orient="records", lines=True)
+    pd.DataFrame({"pid": ["a", "b"], "video_duration": [12, 60]}).to_json(
+        tmp / "SMP-Video_anonymized_videos_train.jsonl", orient="records", lines=True)
     df = load_smp(tmp, collected_time=crawl)
-    assert df.set_index("post_id")["views"].to_dict() == {"a": 5000.0, "b": 120.0}
+    assert np.allclose(df.set_index("post_id")["views"].loc[["a", "b"]], [5000.0, 120.0])
+    assert df.set_index("post_id")["duration_s"].to_dict() == {"a": 12.0, "b": 60.0}
     try:
         load_smp(tmp)
     except ValueError:
@@ -99,9 +104,18 @@ def test_min_age_filter():
     assert kept["post_id"].tolist() == ["0", "2"], "drop known-young posts, keep unknown ages"
 
 
+def test_emily_unknown_collection_date(tmp):
+    pd.DataFrame({"url": ["https://www.tiktok.com/@e/video/1"], "description": ["x"],
+                  "published date": ["7/29/19"], "published time": ["11:30 AM"],
+                  "video length": ["8.98s"], "views": [230221]}).to_csv(tmp / "emily.csv", index=False)
+    df = load_emily(tmp / "emily.csv")
+    assert len(filter_min_age(df, 7)) == 1, "unknown collection date must not break age arithmetic"
+
+
 def main():
     test_smp_label_roundtrip()
-    for test in (test_load_smp, test_tiktok10m_age_and_dedup, test_einzz_dedup):
+    for test in (test_load_smp, test_tiktok10m_age_and_dedup, test_einzz_dedup,
+                 test_emily_unknown_collection_date):
         with tempfile.TemporaryDirectory() as d:
             test(Path(d))
     test_lagged_history()

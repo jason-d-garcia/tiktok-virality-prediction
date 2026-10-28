@@ -37,6 +37,7 @@ def test_load_smp(tmp):
     df = load_smp(tmp, collected_time=crawl)
     assert np.allclose(df.set_index("post_id")["views"].loc[["a", "b"]], [5000.0, 120.0])
     assert df.set_index("post_id")["duration_s"].to_dict() == {"a": 12.0, "b": 60.0}
+    assert df["views_estimated"].all(), "an assumed crawl date must be flagged"
     try:
         load_smp(tmp)
     except ValueError:
@@ -110,6 +111,7 @@ def test_emily_unknown_collection_date(tmp):
                   "video length": ["8.98s"], "views": [230221]}).to_csv(tmp / "emily.csv", index=False)
     df = load_emily(tmp / "emily.csv")
     assert len(filter_min_age(df, 7)) == 1, "unknown collection date must not break age arithmetic"
+    assert not df["views_estimated"].any()
 
 
 def main():

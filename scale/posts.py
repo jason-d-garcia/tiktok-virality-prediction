@@ -13,6 +13,7 @@ Each loader returns a DataFrame with these columns (missing values are NaN/None)
     duration_s      float
     caption         str
     video_url       str    page URL used by fetch_clips.py
+    views_estimated bool   views rebuilt using an assumed collection date (SMP --smp-collected)
 
 Field names for the Hugging Face sets come from their dataset cards. Loaders
 fail loudly on a missing column instead of guessing.
@@ -30,7 +31,7 @@ from preprocessing.preprocessing import parse_metric, parse_seconds
 
 COLUMNS = [
     "post_id", "source", "creator_id", "create_time", "collected_time",
-    "views", "followers", "duration_s", "caption", "video_url",
+    "views", "followers", "duration_s", "caption", "video_url", "views_estimated",
 ]
 
 
@@ -48,6 +49,7 @@ def _finish(df):
     df["post_id"] = df["post_id"].astype(str)
     df["creator_id"] = df["creator_id"].astype(str)
     df["caption"] = df["caption"].fillna("").astype(str)
+    df["views_estimated"] = df["views_estimated"].eq(True)  # NaN (not set) -> False
     # an all-NaT collected_time (date unknown) is tz-naive; age arithmetic needs UTC
     for col in ("create_time", "collected_time"):
         df[col] = pd.to_datetime(df[col], utc=True)
@@ -234,6 +236,8 @@ def load_smp(path, collected_time=None):
         "duration_s": pd.to_numeric(duration, errors="coerce"),
         "caption": raw["post_content"],
         "video_url": url,
+        # the label only gives views per day; without a crawl column the day count rests on an assumed date
+        "views_estimated": crawl_col is None,
     })
     return _finish(df)
 

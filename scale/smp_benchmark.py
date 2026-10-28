@@ -9,7 +9,7 @@ same information as post age.
 Protocol: 5-fold creator-disjoint CV on the labeled train split (the challenge
 test labels are not public, so scores are not directly comparable to the
 leaderboard). Inside each outer fold, 25% of training creators are held out to
-calibrate conformal intervals. Metrics match the challenge: MAE, MSE, Spearman.
+calibrate conformal intervals. Metrics: MAPE (the 2025 challenge's ranking metric), MAE, MSE, Spearman.
 
 Feature sets (each adds to the previous):
   meta  calendar time, caption statistics, video metadata (numeric columns)
@@ -149,7 +149,9 @@ def ridge():
 
 def point_scores(y, yhat):
     return {"mae": float(np.mean(np.abs(y - yhat))), "mse": float(np.mean((y - yhat) ** 2)),
-            "src": float(spearmanr(y, yhat).correlation)}
+            "src": float(spearmanr(y, yhat).correlation),
+            # the 2025 challenge ranks by MAPE on the label (MVP, arXiv 2507.00950: 0.1754)
+            "mape": float(np.mean(np.abs((y - yhat) / y)))}
 
 
 # ---------------------------------------------------------------- run

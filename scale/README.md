@@ -29,6 +29,8 @@ need no clips or embeddings, so the creator baseline leaderboard exists before a
 | C. Splits | `python -m scale.splits --posts data/scale/posts.parquet --out data/scale/splits.parquet` | one row per post with `split_creator`, `split_time`, `split_strict`; `.card.json` with leakage checks. Exits non-zero if a hard check fails |
 | D. Leaderboard | `python -m scale.leaderboard --posts data/scale/posts.parquet --splits data/scale/splits.parquet --scheme strict --preds runs/*.parquet` | `reports/leaderboard_strict.csv` and `.md` |
 
+**On Colab instead of the external drive:** open `notebooks/tiktok10m_colab.ipynb` in Colab (CPU runtime). It downloads TikTok-10M to the Colab disk, runs steps A–D and copies the results to Google Drive. `DRY_RUN = True` checks it on synthetic shards first.
+
 **Split schemes.** `creator`: held-out creators by hash, any date. `time`: global
 date cutoffs (last 10% of dates test, 10% before that val) with a 7-day embargo
 before each cutoff. `strict` (headline): held-out creators *and* later dates, so a

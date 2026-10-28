@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+data/scale/
+models/scale/
+.venv/
+data/hf/

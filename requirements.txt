@@ -1,6 +1,7 @@
 # Core
 numpy~=2.0.2
 pandas~=2.3.3
+pyarrow
 scikit-learn~=1.6.1
 matplotlib~=3.9.4
 tqdm~=4.67.1

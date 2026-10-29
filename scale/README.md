@@ -16,6 +16,48 @@ a point. Then adapt it to Emily and calibrate its intervals with conformal predi
 | 5. Pretrain | `python -m scale.train --posts data/scale/posts.parquet --emb-dirs data/scale/emb/text data/scale/emb/av --modalities video,audio,text --head mdn --out models/scale/mdn_all.pt` | checkpoint + a row in `reports/scale_results.csv` |
 | 6. Adapt to Emily | `python -m scale.finetune --posts data/scale/posts.parquet --checkpoint models/scale/mdn_all.pt --emb-dirs data/scale/emb/text data/scale/emb/av` | rows per mode and calibration |
 
+## TikTok-10M, shared splits and the leaderboard
+
+Run these once the shards are on the external drive (`<drive>` below). Steps 0–2
+need no clips or embeddings, so the creator baseline leaderboard exists before any model does.
+
+| Step | Command | Output |
+| --- | --- | --- |
+| 0. Dry run (no download) | `python -m tests.synthetic_tiktok10m --out data/synthetic/tiktok10m`, then steps A–D on that folder | proves the chain end to end |
+| A. Ingest TikTok-10M | `python -m scale.ingest_tiktok10m --src /Volumes/<drive>/hf/tiktok10m --out /Volumes/<drive>/tiktok/tiktok10m_posts.parquet` | deduped post table + `.card.json` (duplicates, creator sizes, truncation histogram, ages). Streams one row group at a time; re-runs skip finished shards. `--max-shards 1` for a first look |
+| B. Build the post table | step 1 above with `--tiktok10m /Volumes/<drive>/tiktok/tiktok10m_posts.parquet` (plus `--emily`, `--smp`, `--einzz`) | `posts.parquet` |
+| C. Splits | `python -m scale.splits --posts data/scale/posts.parquet --out data/scale/splits.parquet` | one row per post with `split_creator`, `split_time`, `split_strict`; `.card.json` with leakage checks. Exits non-zero if a hard check fails |
+| D. Leaderboard | `python -m scale.leaderboard --posts data/scale/posts.parquet --splits data/scale/splits.parquet --scheme strict --preds runs/*.parquet` | `reports/leaderboard_strict.csv` and `.md` |
+
+**On Colab instead of the external drive:** open `notebooks/tiktok10m_colab.ipynb` in Colab (CPU runtime). It downloads TikTok-10M to the Colab disk, runs steps A–D and copies the results to Google Drive. `DRY_RUN = True` checks it on synthetic shards first.
+
+**Split schemes.** `creator`: held-out creators by hash, any date. `time`: global
+date cutoffs (last 10% of dates test, 10% before that val) with a 7-day embargo
+before each cutoff. `strict` (headline): held-out creators *and* later dates, so a
+test post's creator and period are both unseen; earlier posts of held-out creators
+are `history` (feed creator-history features only), training creators' later posts
+are `excluded`. SMP-Video and EinzzCookie are `external` in every scheme; Emily is
+`emily_adapt/cal/test` (oldest 60/20/20%, as in `scale.finetune`). Strict test is
+roughly val_frac × test_frac of the posts (~1%), so on a ~20K-post sample raise
+`--test-frac`.
+
+**Leakage checks.** Hard: unique keys, every post assigned, no external or Emily
+post in train/val, creator-disjoint train/val/test, train ends at least the
+embargo before val and val before test. Soft (reported): test posts that repeat a
+training post (same creator, caption and length), and the share of training
+labels read after the test window opened. With one snapshot per post that share
+is ~100%, which means training labels carry platform state from after the test
+period starts: a known limit of cumulative-snapshot data, not a split bug.
+
+**Prediction files** for the leaderboard: `source`, `post_id`, `q0.5` and any other
+`qX` quantile columns on the log1p(views) scale, optional `model`. Write them with
+`scale.leaderboard.write_predictions`, or pass `--splits <table> --scheme strict
+--pred-out runs/<name>.parquet` to `scale.train`. Built-in baselines
+(`global_train`, `creator_median10`, `creator_median10+q`) are always scored, and
+every row shows MAE, Spearman, quantile CRPS, coverage, interval score, MAE on the
+SMP label scale, and the MAE gap to `creator_median10` with a creator-clustered
+bootstrap 95% CI. Checks: `python -m tests.test_pipeline`.
+
 **Unattended run** (steps 2–4 in one command, for a weekend on an external drive): `caffeinate -i python -m scale.weekend_run --posts data/scale/posts.parquet --root /Volumes/<drive>/tiktok --target 100000`. It runs a 200-post pilot per source (drops sources below `--min-success`), then fetches whole-creator batches while the previous batch embeds, deletes clips after embedding, backs off once on a low-success batch and stops on a second one, or when the disk drops below `--min-free-gb`. Progress: `<root>/run_log.jsonl`.
 
 Every step is resumable. Re-run the same command and it skips finished work.

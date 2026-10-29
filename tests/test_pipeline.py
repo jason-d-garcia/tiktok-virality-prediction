@@ -14,10 +14,11 @@ import numpy as np
 import pandas as pd
 
 from scale import ingest_tiktok10m
-from scale.features import add_features
+from scale.build_posts import sample_ingested
+from scale.features import add_features, filter_min_age
 from scale.leaderboard import (build_leaderboard, clustered_bootstrap_ci, quantile_columns, read_predictions,
                                smp_label, write_predictions)
-from scale.posts import load_tiktok10m, views_to_smp_label
+from scale.posts import load_tiktok10m, sample_creators, views_to_smp_label
 from scale.splits import assign_splits, check_splits
 from tests.synthetic_tiktok10m import write_shards
 
@@ -45,13 +46,31 @@ def test_ingest(tmp):
     assert posts.set_index("post_id").loc[pid, "views"] == again["play_count"].iloc[0]
     # age runs to stats_time, so it is later than collected_time-based age
     assert (posts["collected_time"] > posts["create_time"]).all()
-    assert card["share_below_truncation"] == 0.0
+    assert 0.5 < card["share_below_truncation"] < 1.0
     # build_posts hands the ingested table to load_tiktok10m, which passes it through
     assert len(load_tiktok10m(out)) == len(posts)
     # a re-run skips finished shards and gives the same table
     run_ingest(tmp)
     assert pd.read_parquet(out).equals(posts)
     return posts
+
+
+def test_mixed_release_refused(tmp):
+    write_shards(tmp / "mixed", n_shards=2, n_creators=20)
+    write_shards(tmp / "mixed", n_shards=3, n_creators=20)
+    try:
+        ingest_tiktok10m.check_one_release(ingest_tiktok10m.shard_files(tmp / "mixed"))
+    except ValueError:
+        return
+    raise AssertionError("mixed shard sets were accepted")
+
+
+def test_sample_ingested(tmp):
+    out, df, _ = run_ingest(tmp)
+    full = filter_min_age(pd.read_parquet(out))
+    got = sample_ingested(out, 1000, 5, 7)
+    expect = sample_creators(full, 1000, 5)
+    assert set(got["post_id"]) == set(expect["post_id"]) and len(got) <= 1000
 
 
 def post_table(tmp):
@@ -133,6 +152,8 @@ def main():
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
         test_ingest(tmp / "a")
+        test_mixed_release_refused(tmp)
+        test_sample_ingested(tmp / "c")
         posts = post_table(tmp / "b")
         splits = test_splits(posts)
         test_leaderboard(posts, splits, tmp)

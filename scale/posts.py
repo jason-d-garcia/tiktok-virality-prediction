@@ -101,7 +101,9 @@ def load_emily(csv_path, collected_time=None):
 
 
 TIKTOK10M_COLUMNS = ["id", "user_id", "create_time", "collected_time", "play_count", "duration", "desc", "url"]
-# play_count is left-truncated here: the set holds trending posts (memo section 4)
+# The memo (section 4) reported play_count left-truncated at ~10^4.5. The full release
+# (2026-10-29 data card) shows no such cut: median 4,016 views, 77% below 10^4.5.
+# Kept as a reference point for the data card.
 TIKTOK10M_TRUNCATION_VIEWS = 10 ** 4.5
 
 

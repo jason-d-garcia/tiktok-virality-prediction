@@ -155,7 +155,7 @@ def score_rows(y, preds, levels, age_days):
     out = {
         "n": len(y),
         "mae": float(np.mean(np.abs(y - med))),
-        "spearman": float(spearmanr(y, med).correlation) if len(y) > 2 and np.std(med) > 0 else np.nan,
+        "spearman": float(spearmanr(y, med).correlation) if len(y) > 2 and np.std(med) > 0 and np.std(y) > 0 else np.nan,
     }
     if len(levels) > 1:
         lv = np.asarray(levels)

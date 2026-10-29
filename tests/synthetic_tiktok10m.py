@@ -4,9 +4,9 @@ Synthetic shards in the TikTok-10M layout, for dry runs before the real download
     python -m tests.synthetic_tiktok10m --out data/synthetic/tiktok10m --shards 3 --creators 400
 
 Same columns as the release (plus a few the pipeline ignores), unix-second
-timestamps, stats_time after collected_time, play_count cut at ~10^4.5 like the
-trending-only release, and ~1% of posts repeated in a later shard with a newer
-reading.
+timestamps, stats_time after collected_time, views centred near the release's
+median (~4K) with no truncation (the full release shows none), and ~1% of posts
+repeated in a later shard with a newer reading.
 """
 
 import argparse
@@ -23,7 +23,7 @@ def make_posts(n_creators=400, seed=0):
     rng = np.random.default_rng(seed)
     rows = []
     for c in range(n_creators):
-        level = rng.normal(5.2, 0.8)            # creator's typical log10 views
+        level = rng.normal(3.6, 0.8)            # creator's typical log10 views
         n = max(1, int(rng.lognormal(2.2, 0.9)))
         first = rng.uniform(0, SPAN_DAYS * 0.8)
         days = np.sort(first + rng.uniform(0, SPAN_DAYS - first, n))
@@ -40,7 +40,6 @@ def make_posts(n_creators=400, seed=0):
     df["play_count"] = np.floor(df["views"]).astype("int64")
     df["digg_count"] = (df["play_count"] * 0.08).astype("int64")
     df["url"] = "https://www.tiktok.com/@" + df["user_id"] + "/video/" + df["id"]
-    df = df[df["play_count"] >= 10 ** 4.5]      # trending-only, like the release
     return df.drop(columns=["day", "views"]).reset_index(drop=True)
 
 

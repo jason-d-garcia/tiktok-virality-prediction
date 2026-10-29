@@ -16,6 +16,7 @@ Every shard's mapped file is kept under <out>.parts/ so a re-run skips finished 
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -34,6 +35,14 @@ def shard_files(src):
     if not files:
         raise FileNotFoundError(f"No parquet files under {src}")
     return files
+
+
+def check_one_release(files):
+    """Refuse a folder mixing shard sets, e.g. synthetic train-*-of-00003 next to the real -of-00010."""
+    totals = {m.group(1) for f in files if (m := re.search(r"-of-(\d+)", f.name))}
+    if len(totals) > 1:
+        raise ValueError(f"shards from different releases in one folder ({sorted(totals)}): "
+                         + ", ".join(f.name for f in files))
 
 
 def map_shard(path, views_at, batch_rows=250_000):
@@ -92,7 +101,7 @@ def data_card(posts, n_raw, n_mapped, files):
     age = (posts["collected_time"] - posts["create_time"]).dt.total_seconds() / 86400
     per_creator = posts.groupby("creator_id").size()
     log_v = np.log10(np.maximum(views, 1))
-    edges = np.arange(3.0, 6.01, 0.25)
+    edges = np.arange(1.0, 7.01, 0.25)
     hist, _ = np.histogram(log_v, bins=edges)
     return {
         "shards": [f.name for f in files],
@@ -107,7 +116,7 @@ def data_card(posts, n_raw, n_mapped, files):
         "views_quantiles": {q: float(np.quantile(views, float(q))) for q in ("0.001", "0.01", "0.1", "0.5", "0.9")},
         "truncation_views": TIKTOK10M_TRUNCATION_VIEWS,
         "share_below_truncation": float(np.mean(views < TIKTOK10M_TRUNCATION_VIEWS)),
-        # a sharp cut shows as near-empty bins left of 4.5 and a jump right of it
+        # a sharp cut would show as near-empty bins left of 4.50; the full release has none
         "log10_views_hist": {f"{lo:.2f}": int(n) for lo, n in zip(edges[:-1], hist)},
         "age_days_quantiles": {q: float(age.quantile(float(q))) for q in ("0.01", "0.1", "0.5", "0.9", "0.99")},
         "age_unknown": float(age.isna().mean()),
@@ -124,7 +133,9 @@ def main():
     parser.add_argument("--batch-rows", type=int, default=250_000)
     args = parser.parse_args()
 
-    files = shard_files(args.src)[:args.max_shards]
+    files = shard_files(args.src)
+    check_one_release(files)
+    files = files[:args.max_shards]
     out = Path(args.out)
     parts_dir = out.with_suffix(".parts")
     parts_dir.mkdir(parents=True, exist_ok=True)

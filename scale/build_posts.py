@@ -13,10 +13,33 @@ it is a test set with ~1 post per creator.
 import argparse
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 
 from scale.features import MIN_AGE_DAYS, add_features, filter_min_age
-from scale.posts import LOADERS, TEST_ONLY_SOURCES, sample_creators
+from scale.posts import COLUMNS, LOADERS, TEST_ONLY_SOURCES, _finish, sample_creators
+
+
+def is_ingested(path):
+    """True for the single table scale.ingest_tiktok10m writes."""
+    path = Path(path)
+    return path.suffix == ".parquet" and path.is_file() and set(COLUMNS) <= set(pq.read_schema(path).names)
+
+
+def sample_ingested(path, n_posts, min_posts_per_creator, min_age_days, seed=42):
+    """
+    Pick whole creators from three narrow columns, then read only their rows, so
+    the ~10M-row ingested TikTok-10M table never sits in memory with captions.
+    Same eligibility and sampling as filter_min_age + sample_creators.
+    """
+    narrow = pd.read_parquet(path, columns=["creator_id", "create_time", "collected_time"])
+    age = (narrow["collected_time"] - narrow["create_time"]).dt.total_seconds() / 86400
+    narrow = narrow[~(age < min_age_days)]
+    keep = sample_creators(narrow, n_posts, min_posts_per_creator, seed)["creator_id"].unique()
+    df = pq.read_table(path, filters=[("creator_id", "in", list(map(str, keep)))]).to_pandas()
+    print(f"tiktok10m: sampled {len(keep):,} creators from {narrow['creator_id'].nunique():,} before loading")
+    return filter_min_age(_finish(df), min_age_days)
 
 
 def main():
@@ -42,6 +65,8 @@ def main():
             df = loader(path, args.emily_collected)
         elif name == "smp":
             df = loader(path, args.smp_collected)
+        elif name == "tiktok10m" and args.max_posts_per_source and is_ingested(path):
+            df = sample_ingested(path, args.max_posts_per_source, args.min_posts_per_creator, args.min_age_days)
         elif name == "tiktok10m":
             df = loader(path, views_at=args.tiktok10m_views_at)
         else:

@@ -28,6 +28,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from preprocessing.preprocessing import parse_metric, parse_seconds
@@ -68,7 +69,7 @@ def _to_utc(col):
     return pd.to_datetime(col, utc=True, errors="coerce", format="mixed")
 
 
-def _read_any(path, columns=None):
+def _read_any(path, columns=None, filter=None):
     """Read a file or a directory of parquet shards. `columns` limits parquet reads
     (kept as Arrow-backed dtypes) so multi-GB dumps fit in memory."""
     path = Path(path)
@@ -78,7 +79,8 @@ def _read_any(path, columns=None):
     if files[0].suffix == ".parquet":
         if columns is not None:
             cols = set(pq.read_schema(files[0]).names)
-            table = pa.concat_tables([pq.read_table(f, columns=[c for c in columns if c in cols]) for f in files])
+            table = pa.concat_tables([pq.read_table(f, columns=[c for c in columns if c in cols], filters=filter)
+                                      for f in files])
             # large_string: 10M captions overflow the 32-bit offsets of plain `string` on sort
             table = table.cast(pa.schema([pa.field(f.name, pa.large_string() if f.type == pa.string() else f.type)
                                           for f in table.schema]))
@@ -111,7 +113,7 @@ def load_emily(csv_path, collected_time=None):
     return _finish(df)
 
 
-def load_tiktok10m(path, views_at="stats_time"):
+def load_tiktok10m(path, views_at="stats_time", creators=None, light=False):
     """
     The-data-company/TikTok-10M parquet shards.
 
@@ -119,9 +121,19 @@ def load_tiktok10m(path, views_at="stats_time"):
     `collected_time` (memo section 4, to verify). `views_at` picks the timestamp that
     post age is measured to; it falls back to `collected_time` if the column is absent.
     A post seen more than once keeps its latest reading.
+
+    The full dump does not fit in 8 GB, so `light=True` skips caption and URL (enough
+    to pick creators) and `creators` reads only those creators' posts.
     """
-    needed = ["id", "user_id", "create_time", "collected_time", "play_count", "duration", "desc", "url"]
-    raw = _read_any(path, columns=needed + ([views_at] if views_at not in needed else []))
+    needed = ["id", "user_id", "create_time", "collected_time", "play_count", "duration"]
+    if not light:
+        needed += ["desc", "url"]
+    filter = None
+    if creators is not None:
+        first = next(Path(path).rglob("*.parquet"), Path(path))
+        id_type = pq.read_schema(first).field("user_id").type
+        filter = pc.field("user_id").isin(pa.array([str(c) for c in creators]).cast(id_type))
+    raw = _read_any(path, columns=needed + ([views_at] if views_at not in needed else []), filter=filter)
     _require(raw, needed, "tiktok10m")
     if views_at not in raw.columns:
         print(f"tiktok10m: no {views_at} column, measuring age to collected_time")
@@ -134,8 +146,8 @@ def load_tiktok10m(path, views_at="stats_time"):
         "collected_time": _to_utc(raw[views_at]),
         "views": pd.to_numeric(raw["play_count"], errors="coerce"),
         "duration_s": pd.to_numeric(raw["duration"], errors="coerce"),
-        "caption": raw["desc"],
-        "video_url": raw["url"],
+        "caption": raw["desc"] if "desc" in raw else "",
+        "video_url": raw["url"] if "url" in raw else None,
     })
     df = df.sort_values("collected_time", na_position="first").drop_duplicates("post_id", keep="last")
     return _finish(df)

@@ -43,7 +43,12 @@ def main():
         elif name == "smp":
             df = loader(path, args.smp_collected)
         elif name == "tiktok10m":
-            df = loader(path, views_at=args.tiktok10m_views_at)
+            creators = None
+            if args.max_posts_per_source:  # pick creators from a light read, then load only theirs
+                light = filter_min_age(loader(path, views_at=args.tiktok10m_views_at, light=True), args.min_age_days)
+                creators = set(sample_creators(light, args.max_posts_per_source, args.min_posts_per_creator)["creator_id"])
+                del light
+            df = loader(path, views_at=args.tiktok10m_views_at, creators=creators)
         else:
             df = loader(path)
         n_loaded = len(df)

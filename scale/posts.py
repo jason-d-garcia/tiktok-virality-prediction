@@ -27,6 +27,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from preprocessing.preprocessing import parse_metric, parse_seconds
 
@@ -66,12 +68,21 @@ def _to_utc(col):
     return pd.to_datetime(col, utc=True, errors="coerce", format="mixed")
 
 
-def _read_any(path):
+def _read_any(path, columns=None):
+    """Read a file or a directory of parquet shards. `columns` limits parquet reads
+    (kept as Arrow-backed dtypes) so multi-GB dumps fit in memory."""
     path = Path(path)
-    files = sorted(path.glob("*.parquet")) if path.is_dir() else [path]
+    files = sorted(path.rglob("*.parquet")) if path.is_dir() else [path]
     if not files:
         raise FileNotFoundError(f"No parquet files under {path}")
     if files[0].suffix == ".parquet":
+        if columns is not None:
+            cols = set(pq.read_schema(files[0]).names)
+            table = pa.concat_tables([pq.read_table(f, columns=[c for c in columns if c in cols]) for f in files])
+            # large_string: 10M captions overflow the 32-bit offsets of plain `string` on sort
+            table = table.cast(pa.schema([pa.field(f.name, pa.large_string() if f.type == pa.string() else f.type)
+                                          for f in table.schema]))
+            return table.to_pandas(types_mapper=pd.ArrowDtype)
         return pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
     if files[0].suffix in (".json", ".jsonl"):
         return pd.read_json(files[0], lines=files[0].suffix == ".jsonl")
@@ -109,8 +120,9 @@ def load_tiktok10m(path, views_at="stats_time"):
     post age is measured to; it falls back to `collected_time` if the column is absent.
     A post seen more than once keeps its latest reading.
     """
-    raw = _read_any(path)
-    _require(raw, ["id", "user_id", "create_time", "collected_time", "play_count", "duration", "desc", "url"], "tiktok10m")
+    needed = ["id", "user_id", "create_time", "collected_time", "play_count", "duration", "desc", "url"]
+    raw = _read_any(path, columns=needed + ([views_at] if views_at not in needed else []))
+    _require(raw, needed, "tiktok10m")
     if views_at not in raw.columns:
         print(f"tiktok10m: no {views_at} column, measuring age to collected_time")
         views_at = "collected_time"
